@@ -1,0 +1,87 @@
+name: Re-deploy (duplicate latest)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  redeploy:
+    runs-on: ubuntu-latest
+    env:
+      APPWRITE_ENDPOINT: https://sfo.cloud.appwrite.io/v1
+      APPWRITE_PROJECT_ID: 6a17843500336b1e97d8
+      APPWRITE_SITE_ID: splits
+    steps:
+      - name: Find latest deployment
+        id: latest
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+        run: |
+          response=$(curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments?queries[]=orderDesc(%22%24createdAt%22)&queries[]=limit(1)" \
+            -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}")
+          latest_id=$(echo "$response" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["deployments"][0]["$id"])')
+          echo "latest_id=$latest_id" >> "$GITHUB_OUTPUT"
+          echo "Latest deployment: $latest_id"
+
+      - name: Duplicate deployment
+        id: duplicate
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+          LATEST_ID: ${{ steps.latest.outputs.latest_id }}
+        run: |
+          response=$(curl -sS -X POST "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments/duplicate" \
+            -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" \
+            -H "Content-Type: application/json" \
+            -d "{\"deploymentId\":\"${LATEST_ID}\"}")
+          echo "$response"
+          new_id=$(echo "$response" | python3 -c 'import sys,json;print(json.load(sys.stdin)["$id"])')
+          echo "new_id=$new_id" >> "$GITHUB_OUTPUT"
+          echo "New deployment: $new_id"
+
+      - name: Wait for build
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+          NEW_ID: ${{ steps.duplicate.outputs.new_id }}
+        run: |
+          for i in $(seq 1 60); do
+            response=$(curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments/${NEW_ID}" \
+              -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
+              -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}")
+            status=$(echo "$response" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("status",""))')
+            duration=$(echo "$response" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("buildDuration",0))')
+            echo "[$i/60] status=$status buildDuration=${duration}s"
+            case "$status" in
+              ready)
+                echo "Build succeeded."
+                exit 0 ;;
+              failed|cancelled)
+                echo "::error::Build $status. Logs:"
+                echo "$response" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("buildLogs",""))'
+                exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::Timed out waiting for build."
+          exit 1
+
+      - name: Activate deployment
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+          NEW_ID: ${{ steps.duplicate.outputs.new_id }}
+        run: |
+          response=$(curl -sS -X PATCH "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployment" \
+            -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" \
+            -H "Content-Type: application/json" \
+            -d "{\"deploymentId\":\"${NEW_ID}\"}")
+          echo "$response"
+          echo "Activated deployment: $NEW_ID"
+
+      - name: Verify
+        run: |
+          sleep 5
+          for path in / /activities /calendar /coach /load /records /settings; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "https://6a186ef666fb750d3818.appwrite.network${path}?_t=$RANDOM")
+            printf "%-15s %s\n" "$path" "$code"
+          done
