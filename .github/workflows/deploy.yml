@@ -17,15 +17,46 @@ jobs:
       - name: Package source
         run: tar -czf /tmp/code.tar.gz --exclude=node_modules --exclude=.git --exclude=.next .
 
-      - name: Deploy to Appwrite Sites
+      - name: Create deployment
+        id: create
         env:
           APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
         run: |
-          curl -s -X POST "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments" \
+          response=$(curl -sS -X POST "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments" \
             -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
             -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" \
             -F "code=@/tmp/code.tar.gz" \
             -F "installCommand=npm install" \
             -F "buildCommand=npm run build" \
             -F "outputDirectory=.next" \
-            -F "activate=true"
+            -F "activate=true")
+          echo "$response"
+          deployment_id=$(echo "$response" | python3 -c 'import sys,json;print(json.load(sys.stdin)["$id"])')
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "Created deployment: $deployment_id"
+
+      - name: Wait for build
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+          DEPLOYMENT_ID: ${{ steps.create.outputs.deployment_id }}
+        run: |
+          for i in $(seq 1 60); do
+            response=$(curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments/${DEPLOYMENT_ID}" \
+              -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
+              -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}")
+            status=$(echo "$response" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("status",""))')
+            duration=$(echo "$response" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("buildDuration",0))')
+            echo "[$i/60] status=$status buildDuration=${duration}s"
+            case "$status" in
+              ready)
+                echo "Build succeeded."
+                exit 0 ;;
+              failed|cancelled)
+                echo "::error::Build $status. Logs:"
+                echo "$response" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("buildLogs",""))'
+                exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::Timed out after 10 minutes waiting for build."
+          exit 1
