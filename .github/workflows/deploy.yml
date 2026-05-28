@@ -7,17 +7,25 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      APPWRITE_ENDPOINT: https://sfo.cloud.appwrite.io/v1
+      APPWRITE_PROJECT_ID: 6a17843500336b1e97d8
+      APPWRITE_SITE_ID: splits
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Appwrite CLI
-        run: curl -sL https://appwrite.io/cli/install.sh | bash
+      - name: Package source
+        run: tar -czf code.tar.gz --exclude=node_modules --exclude=.git --exclude=.next .
 
-      - name: Deploy
+      - name: Deploy to Appwrite Sites
         env:
           APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
         run: |
-          appwrite client \
-            --endpoint https://sfo.cloud.appwrite.io/v1 \
-            --project-id 6a17843500336b1e97d8
-          appwrite push site --site-id splits --activate
+          curl -s -X POST "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments" \
+            -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" \
+            -F "code=@code.tar.gz" \
+            -F "installCommand=npm install" \
+            -F "buildCommand=npm run build" \
+            -F "outputDirectory=.next" \
+            -F "activate=true"
