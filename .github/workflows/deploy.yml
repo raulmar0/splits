@@ -17,7 +17,7 @@ jobs:
       - name: Package source
         run: tar -czf /tmp/code.tar.gz --exclude=node_modules --exclude=.git --exclude=.next .
 
-      - name: Create deployment
+      - name: Create deployment (inactive)
         id: create
         env:
           APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
@@ -29,7 +29,7 @@ jobs:
             -F "installCommand=npm install" \
             -F "buildCommand=npm run build" \
             -F "outputDirectory=.next" \
-            -F "activate=true")
+            -F "activate=false")
           echo "$response"
           deployment_id=$(echo "$response" | python3 -c 'import sys,json;print(json.load(sys.stdin)["$id"])')
           echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
@@ -60,3 +60,16 @@ jobs:
           done
           echo "::error::Timed out after 10 minutes waiting for build."
           exit 1
+
+      - name: Activate
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+          DEPLOYMENT_ID: ${{ steps.create.outputs.deployment_id }}
+        run: |
+          curl -sS -X PATCH "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployment" \
+            -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" \
+            -H "Content-Type: application/json" \
+            -d "{\"deploymentId\":\"${DEPLOYMENT_ID}\"}"
+          echo
+          echo "Activated $DEPLOYMENT_ID"

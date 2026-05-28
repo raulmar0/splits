@@ -1,0 +1,56 @@
+name: Restore site to latest ready deployment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    env:
+      APPWRITE_ENDPOINT: https://sfo.cloud.appwrite.io/v1
+      APPWRITE_PROJECT_ID: 6a17843500336b1e97d8
+      APPWRITE_SITE_ID: splits
+    steps:
+      - name: Find most recent ready deployment
+        id: pick
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+        run: |
+          curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments" \
+            -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" > deployments.json
+          python3 <<'PY' > pick.txt
+          import json
+          d = json.load(open("deployments.json"))
+          ds = sorted(d.get("deployments", []), key=lambda x: x.get("$createdAt",""), reverse=True)
+          for x in ds:
+              if x.get("status") == "ready":
+                  print(x["$id"])
+                  break
+          PY
+          target=$(cat pick.txt)
+          if [ -z "$target" ]; then
+            echo "::error::No ready deployment found"
+            exit 1
+          fi
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "Will activate: $target"
+
+      - name: Activate
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+          TARGET: ${{ steps.pick.outputs.target }}
+        run: |
+          curl -sS -X PATCH "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployment" \
+            -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" \
+            -H "Content-Type: application/json" \
+            -d "{\"deploymentId\":\"${TARGET}\"}" | python3 -m json.tool
+
+      - name: Verify (best-effort, may need a few minutes)
+        run: |
+          sleep 15
+          for path in / /activities /calendar /coach /load /records /settings; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "https://6a186ef666fb750d3818.appwrite.network${path}?_t=$RANDOM" || echo "ERR")
+            printf "%-15s %s\n" "$path" "$code"
+          done
