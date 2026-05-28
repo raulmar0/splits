@@ -1,0 +1,18 @@
+{
+  "projectId": "6a17843500336b1e97d8",
+  "endpoint": "https://sfo.cloud.appwrite.io/v1",
+  "sites": [
+    {
+      "$id": "splits",
+      "name": "splits",
+      "framework": "nextjs",
+      "buildRuntime": "node-22",
+      "installCommand": "npm install",
+      "buildCommand": "npm run build",
+      "outputDirectory": ".next",
+      "adapter": "ssr",
+      "buildSpecification": "s-0.5vcpu-512mb",
+      "enabled": true
+    }
+  ]
+}

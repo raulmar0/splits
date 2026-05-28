@@ -1,0 +1,23 @@
+name: Deploy to Appwrite
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Appwrite CLI
+        run: curl -sL https://appwrite.io/cli/install.sh | bash
+
+      - name: Deploy
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+        run: |
+          appwrite client \
+            --endpoint https://sfo.cloud.appwrite.io/v1 \
+            --project-id 6a17843500336b1e97d8
+          appwrite push sites --yes
