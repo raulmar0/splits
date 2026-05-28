@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Manrope, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/hooks/useTheme";
+import { AuthProvider } from "@/hooks/useAuth";
+import { getCurrentUser } from "@/lib/appwrite/server";
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -22,11 +24,15 @@ export const metadata: Metadata = {
   description: "App de análisis deportivo para atletas de resistencia",
 };
 
-export default function RootLayout({
+export const dynamic = "force-dynamic";
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const me = await getCurrentUser();
+  const authUser = me ? { id: me.$id, email: me.email, name: me.name } : null;
   return (
     <html
       lang="es"
@@ -34,7 +40,9 @@ export default function RootLayout({
       data-theme="oscuro"
     >
       <body className="min-h-full flex flex-col">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <AuthProvider user={authUser}>{children}</AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

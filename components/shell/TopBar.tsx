@@ -2,6 +2,7 @@
 
 import { Search, Bell } from "lucide-react";
 import { Button } from "@/components/ui";
+import { useAuth } from "@/hooks/useAuth";
 
 interface TopBarProps {
   title: string;
@@ -9,7 +10,16 @@ interface TopBarProps {
   right?: React.ReactNode;
 }
 
+function initialsOf(name: string | undefined): string {
+  if (!name) return "??";
+  const parts = name.trim().split(/\s+/);
+  return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "??";
+}
+
 export function TopBar({ title, subtitle, right }: TopBarProps) {
+  const { user } = useAuth();
+  const initials = initialsOf(user?.name);
+
   return (
     <div
       className="flex items-center shrink-0"
@@ -48,13 +58,14 @@ export function TopBar({ title, subtitle, right }: TopBarProps) {
           <Bell size={13} />
         </Button>
         <div
+          title={user?.name ?? ""}
           className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-[11px] font-bold"
           style={{
             background: "linear-gradient(135deg, oklch(0.55 0.12 145), oklch(0.45 0.10 230))",
             color: "#0a0c10",
           }}
         >
-          MR
+          {initials}
         </div>
       </div>
     </div>

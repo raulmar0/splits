@@ -1,6 +1,12 @@
+import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/shell";
+import { getCurrentUser } from "@/lib/appwrite/server";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export const dynamic = "force-dynamic";
+
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
   return (
     <div className="flex min-h-screen" style={{ background: "var(--bg)" }}>
       <Sidebar />

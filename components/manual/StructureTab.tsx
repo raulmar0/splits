@@ -1,47 +1,41 @@
 "use client";
 
-import { useForm, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { Controller, useFieldArray, useFormContext } from "react-hook-form";
 import { Input, Button, SectionLabel } from "@/components/ui";
 import { SportPill } from "@/components/shared/SportPill";
-import type { Sport } from "@/lib/types";
+import type { Block, Sport } from "@/lib/types";
 import { BlockTimeline } from "./BlockTimeline";
 import { BlockList } from "./BlockList";
 import { Plus, Repeat } from "lucide-react";
+import type { WorkoutFormData } from "./types";
 
-const workoutSchema = z.object({
-  title: z.string().min(1, "Título requerido"),
-  date: z.string().min(1, "Fecha requerida"),
-  time: z.string().min(1, "Hora requerida"),
-  sport: z.enum(["ride", "run", "swim", "strength", "trail", "rest"]),
-  targetDur: z.string(),
-  targetDist: z.string().optional(),
-  targetTSS: z.string(),
-  targetIF: z.string(),
-  notes: z.string().optional(),
-});
-
-type WorkoutFormData = z.infer<typeof workoutSchema>;
-
-const SPORTS = ["ride", "run", "swim", "strength", "trail", "rest"] as const;
+const SPORTS: Sport[] = ["ride", "run", "swim", "strength", "trail", "rest"];
 
 export function StructureTab() {
-  const { control, watch, setValue } = useForm<WorkoutFormData>({
-    resolver: zodResolver(workoutSchema),
-    defaultValues: {
-      title: "VO2max · 5x4'",
-      date: "2026-05-19",
-      time: "07:00",
-      sport: "ride",
-      targetDur: "1:15:00",
-      targetTSS: "118",
-      targetIF: "0.85",
-      notes: "",
-    },
-  });
-
+  const { control, watch, setValue } = useFormContext<WorkoutFormData>();
+  const { append, remove } = useFieldArray({ control, name: "blocks" });
   const sport = watch("sport");
+  const blocks = (watch("blocks") ?? []) as Block[];
+
+  function addBlock() {
+    append({
+      kind: "INTERVAL",
+      label: "Nuevo bloque",
+      durationSec: 300,
+      target: { type: "zone", value: "Z2" },
+    });
+  }
+
+  function addRepetition() {
+    append({
+      kind: "INTERVAL",
+      label: "Intervalo",
+      durationSec: 240,
+      reps: 4,
+      target: { type: "power", value: "100% FTP" },
+      recovery: { kind: "REST", label: "Recuperación", durationSec: 120, target: { type: "zone", value: "Z1" } },
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -56,12 +50,12 @@ export function StructureTab() {
           <Controller
             name="date"
             control={control}
-            render={({ field }) => <Input label="FECHA" mono {...field} />}
+            render={({ field }) => <Input label="FECHA" mono type="date" {...field} />}
           />
           <Controller
             name="time"
             control={control}
-            render={({ field }) => <Input label="HORA" mono {...field} />}
+            render={({ field }) => <Input label="HORA" mono type="time" {...field} />}
           />
         </div>
       </div>
@@ -70,12 +64,7 @@ export function StructureTab() {
         <SectionLabel>DEPORTE</SectionLabel>
         <div className="flex gap-2 mt-3">
           {SPORTS.map((s) => (
-            <SportPill
-              key={s}
-              sport={s}
-              active={sport === s}
-              onClick={() => setValue("sport", s)}
-            />
+            <SportPill key={s} sport={s} active={sport === s} onClick={() => setValue("sport", s)} />
           ))}
         </div>
       </div>
@@ -83,75 +72,35 @@ export function StructureTab() {
       <div>
         <SectionLabel>OBJETIVO PLANIFICADO</SectionLabel>
         <div className="grid grid-cols-4 gap-3 mt-3">
-          <Controller
-            name="targetDur"
-            control={control}
-            render={({ field }) => (
-              <div
-                className="rounded-[6px] p-3"
-                style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-              >
-                <p className="mono text-[10px]" style={{ color: "var(--text-3)" }}>DURACIÓN</p>
-                <input
-                  className="mono text-[18px] font-semibold bg-transparent border-none outline-none mt-1 w-full"
-                  style={{ color: "var(--text)" }}
-                  {...field}
-                />
-              </div>
-            )}
-          />
-          <Controller
-            name="targetDist"
-            control={control}
-            render={({ field }) => (
-              <div
-                className="rounded-[6px] p-3"
-                style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-              >
-                <p className="mono text-[10px]" style={{ color: "var(--text-3)" }}>DISTANCIA</p>
-                <input
-                  className="mono text-[18px] font-semibold bg-transparent border-none outline-none mt-1 w-full"
-                  style={{ color: "var(--text)" }}
-                  placeholder="—"
-                  {...field}
-                />
-              </div>
-            )}
-          />
-          <Controller
-            name="targetTSS"
-            control={control}
-            render={({ field }) => (
-              <div
-                className="rounded-[6px] p-3"
-                style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-              >
-                <p className="mono text-[10px]" style={{ color: "var(--text-3)" }}>TSS</p>
-                <input
-                  className="mono text-[18px] font-semibold bg-transparent border-none outline-none mt-1 w-full"
-                  style={{ color: "var(--text)" }}
-                  {...field}
-                />
-              </div>
-            )}
-          />
-          <Controller
-            name="targetIF"
-            control={control}
-            render={({ field }) => (
-              <div
-                className="rounded-[6px] p-3"
-                style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-              >
-                <p className="mono text-[10px]" style={{ color: "var(--text-3)" }}>IF</p>
-                <input
-                  className="mono text-[18px] font-semibold bg-transparent border-none outline-none mt-1 w-full"
-                  style={{ color: "var(--text)" }}
-                  {...field}
-                />
-              </div>
-            )}
-          />
+          {[
+            { name: "targetDur", label: "DURACIÓN", placeholder: "" },
+            { name: "targetDist", label: "DISTANCIA", placeholder: "—" },
+            { name: "targetTSS", label: "TSS", placeholder: "" },
+            { name: "targetIF", label: "IF", placeholder: "" },
+          ].map((f) => (
+            <Controller
+              key={f.name}
+              name={f.name as keyof WorkoutFormData}
+              control={control}
+              render={({ field }) => (
+                <div
+                  className="rounded-[6px] p-3"
+                  style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                >
+                  <p className="mono text-[10px]" style={{ color: "var(--text-3)" }}>
+                    {f.label}
+                  </p>
+                  <input
+                    className="mono text-[18px] font-semibold bg-transparent border-none outline-none mt-1 w-full"
+                    style={{ color: "var(--text)" }}
+                    placeholder={f.placeholder}
+                    {...field}
+                    value={typeof field.value === "string" ? field.value : ""}
+                  />
+                </div>
+              )}
+            />
+          ))}
         </div>
       </div>
 
@@ -159,17 +108,17 @@ export function StructureTab() {
         <div className="flex items-center justify-between">
           <SectionLabel>ESTRUCTURA · BLOQUES</SectionLabel>
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" size="sm" type="button" onClick={addBlock}>
               <Plus size={12} /> Bloque
             </Button>
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" size="sm" type="button" onClick={addRepetition}>
               <Repeat size={12} /> Repetición
             </Button>
           </div>
         </div>
         <div className="mt-3">
-          <BlockTimeline />
-          <BlockList />
+          <BlockTimeline blocks={blocks} />
+          <BlockList blocks={blocks} onRemove={(i) => remove(i)} />
         </div>
       </div>
 
