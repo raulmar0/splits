@@ -15,69 +15,73 @@ jobs:
         env:
           APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
         run: |
-          echo "=== Site ==="
           curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}" \
             -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
-            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" | python3 -m json.tool
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" > site.json
+          python3 -m json.tool site.json
 
       - name: List deployments
         env:
           APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
         run: |
-          echo "=== Deployments ==="
           curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments" \
             -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
-            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" | python3 -c '
-          import sys, json
-          d = json.load(sys.stdin)
-          ds = d.get("deployments") or []
-          ds = sorted(ds, key=lambda x: x.get("$createdAt",""), reverse=True)
-          print(f"Total: {d.get(\"total\", len(ds))}")
-          for x in ds[:8]:
-              print(f"  id={x[\"$id\"]} status={x.get(\"status\")} active={x.get(\"activate\")} buildDuration={x.get(\"buildDuration\")}s createdAt={x.get(\"$createdAt\")}")
-          '
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" > deployments.json
+          python3 <<'PY'
+          import json
+          d = json.load(open("deployments.json"))
+          ds = sorted(d.get("deployments", []), key=lambda x: x.get("$createdAt",""), reverse=True)
+          print("Total:", d.get("total", len(ds)))
+          for x in ds[:15]:
+              print(f"  id={x['$id']} status={x.get('status')} active={x.get('activate')} buildDuration={x.get('buildDuration')}s createdAt={x.get('$createdAt')}")
+          PY
 
-      - name: Build logs of latest deployment
+      - name: Build logs of latest ready deployment
         env:
           APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
         run: |
-          echo "=== Build logs of latest ==="
-          latest_id=$(curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments" \
-            -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
-            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" | python3 -c '
-          import sys, json
-          d = json.load(sys.stdin)
+          python3 <<'PY' > latest_ready.txt
+          import json
+          d = json.load(open("deployments.json"))
           ds = sorted(d.get("deployments", []), key=lambda x: x.get("$createdAt",""), reverse=True)
-          print(ds[0]["$id"])
-          ')
-          echo "Latest deployment: $latest_id"
-          curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments/${latest_id}" \
+          for x in ds:
+              if x.get("status") == "ready":
+                  print(x["$id"]); break
+          PY
+          latest_ready=$(cat latest_ready.txt)
+          echo "Latest ready: $latest_ready"
+          curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments/${latest_ready}" \
             -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
-            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" | python3 -c '
-          import sys, json
-          d = json.load(sys.stdin)
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" > latest_ready.json
+          python3 <<'PY'
+          import json
+          d = json.load(open("latest_ready.json"))
           print("status:", d.get("status"))
           print("activate:", d.get("activate"))
           print("buildDuration:", d.get("buildDuration"))
+          print("buildSize:", d.get("buildSize"))
+          print("sourceSize:", d.get("sourceSize"))
           print("--- buildLogs ---")
-          print(d.get("buildLogs", "(empty)"))
-          '
+          print(d.get("buildLogs","(empty)")[-8000:])
+          PY
 
       - name: Site runtime logs
         env:
           APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
         run: |
-          echo "=== Site runtime logs ==="
           curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/logs" \
             -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
-            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" | python3 -c '
-          import sys, json
-          d = json.load(sys.stdin)
-          logs = d.get("logs") or d.get("executions") or []
-          print(f"Total: {d.get(\"total\", len(logs))}")
-          for x in logs[:10]:
-              print(json.dumps(x, indent=2)[:1500])
-              print("---")
-          ' || echo "(failed to parse — raw response:)" && curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/logs" \
-            -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
-            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" | head -c 2000
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" > logs.json
+          echo "Raw (first 4000 chars):"
+          head -c 4000 logs.json
+          echo
+          echo "---"
+          python3 <<'PY' || echo "(JSON parse failed)"
+          import json
+          d = json.load(open("logs.json"))
+          for key in ("logs", "executions", "data"):
+              if key in d:
+                  for x in d[key][:10]:
+                      print(json.dumps(x, indent=2)[:2000]); print("---")
+                  break
+          PY
