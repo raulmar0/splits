@@ -20,4 +20,4 @@ jobs:
           appwrite client \
             --endpoint https://sfo.cloud.appwrite.io/v1 \
             --project-id 6a17843500336b1e97d8
-          appwrite push sites --yes
+          appwrite push sites --activate
