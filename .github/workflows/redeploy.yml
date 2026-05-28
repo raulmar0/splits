@@ -16,10 +16,18 @@ jobs:
         env:
           APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
         run: |
-          response=$(curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments?queries[]=orderDesc(%22%24createdAt%22)&queries[]=limit(1)" \
+          response=$(curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments" \
             -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
             -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}")
-          latest_id=$(echo "$response" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["deployments"][0]["$id"])')
+          echo "Response (first 600 chars):"
+          echo "$response" | head -c 600; echo
+          latest_id=$(echo "$response" | python3 -c '
+          import sys, json
+          d = json.load(sys.stdin)
+          ds = d.get("deployments") or d.get("data") or []
+          ds = sorted(ds, key=lambda x: x.get("$createdAt",""), reverse=True)
+          print(ds[0]["$id"])
+          ')
           echo "latest_id=$latest_id" >> "$GITHUB_OUTPUT"
           echo "Latest deployment: $latest_id"
 
