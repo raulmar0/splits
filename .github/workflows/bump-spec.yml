@@ -1,0 +1,111 @@
+name: Bump runtime spec and redeploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_spec:
+        description: Runtime specification slug
+        required: true
+        default: s-1vcpu-1gb
+        type: choice
+        options:
+          - s-0.5vcpu-512mb
+          - s-1vcpu-512mb
+          - s-1vcpu-1gb
+          - s-2vcpu-2gb
+          - s-2vcpu-4gb
+          - s-4vcpu-4gb
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    env:
+      APPWRITE_ENDPOINT: https://sfo.cloud.appwrite.io/v1
+      APPWRITE_PROJECT_ID: 6a17843500336b1e97d8
+      APPWRITE_SITE_ID: splits
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update site spec
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+          NEW_SPEC: ${{ github.event.inputs.runtime_spec }}
+        run: |
+          curl -sS -X PUT "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}" \
+            -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"name\": \"splits\",
+              \"framework\": \"nextjs\",
+              \"enabled\": true,
+              \"logging\": true,
+              \"buildRuntime\": \"node-22\",
+              \"adapter\": \"ssr\",
+              \"installCommand\": \"npm install\",
+              \"buildCommand\": \"npm run build\",
+              \"outputDirectory\": \".next\",
+              \"buildSpecification\": \"${NEW_SPEC}\",
+              \"runtimeSpecification\": \"${NEW_SPEC}\"
+            }" | python3 -m json.tool
+
+      - name: Package source
+        run: tar -czf /tmp/code.tar.gz --exclude=node_modules --exclude=.git --exclude=.next .
+
+      - name: Create deployment
+        id: create
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+        run: |
+          response=$(curl -sS -X POST "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments" \
+            -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" \
+            -F "code=@/tmp/code.tar.gz" \
+            -F "installCommand=npm install" \
+            -F "buildCommand=npm run build" \
+            -F "outputDirectory=.next" \
+            -F "activate=false")
+          echo "$response"
+          deployment_id=$(echo "$response" | python3 -c 'import sys,json;print(json.load(sys.stdin)["$id"])')
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for build
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+          DEPLOYMENT_ID: ${{ steps.create.outputs.deployment_id }}
+        run: |
+          for i in $(seq 1 60); do
+            response=$(curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments/${DEPLOYMENT_ID}" \
+              -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
+              -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}")
+            status=$(echo "$response" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("status",""))')
+            echo "[$i/60] status=$status"
+            case "$status" in
+              ready) echo "Build succeeded."; exit 0 ;;
+              failed|cancelled)
+                echo "::error::Build $status"
+                echo "$response" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("buildLogs",""))'
+                exit 1 ;;
+            esac
+            sleep 10
+          done
+          exit 1
+
+      - name: Activate
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+          DEPLOYMENT_ID: ${{ steps.create.outputs.deployment_id }}
+        run: |
+          curl -sS -X PATCH "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployment" \
+            -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" \
+            -H "Content-Type: application/json" \
+            -d "{\"deploymentId\":\"${DEPLOYMENT_ID}\"}"
+
+      - name: Verify
+        run: |
+          sleep 30
+          for path in / /activities /calendar /coach /load /records /settings; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "https://6a186ef666fb750d3818.appwrite.network${path}?_t=$RANDOM" || echo ERR)
+            printf "%-15s %s\n" "$path" "$code"
+          done
