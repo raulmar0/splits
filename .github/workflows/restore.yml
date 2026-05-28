@@ -22,23 +22,21 @@ jobs:
           APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
           INPUT_ID: ${{ github.event.inputs.deployment_id }}
         run: |
-          if [ -n "$INPUT_ID" ]; then
-            target="$INPUT_ID"
-          else
-            curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments" \
-              -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
-              -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" > deployments.json
-            python3 <<'PY' > pick.txt
-            import json
-            d = json.load(open("deployments.json"))
-            ds = sorted(d.get("deployments", []), key=lambda x: x.get("$createdAt",""), reverse=True)
-            for x in ds:
-                if x.get("status") == "ready":
-                    print(x["$id"])
-                    break
-            PY
-            target=$(cat pick.txt)
-          fi
+          curl -sS "${APPWRITE_ENDPOINT}/sites/${APPWRITE_SITE_ID}/deployments" \
+            -H "X-Appwrite-Key: ${APPWRITE_API_KEY}" \
+            -H "X-Appwrite-Project: ${APPWRITE_PROJECT_ID}" > deployments.json
+          cat > pick.py <<'PYEOF'
+          import json, os
+          input_id = os.environ.get("INPUT_ID", "").strip()
+          if input_id:
+              print(input_id); raise SystemExit
+          d = json.load(open("deployments.json"))
+          ds = sorted(d.get("deployments", []), key=lambda x: x.get("$createdAt",""), reverse=True)
+          for x in ds:
+              if x.get("status") == "ready":
+                  print(x["$id"]); raise SystemExit
+          PYEOF
+          target=$(python3 pick.py)
           if [ -z "$target" ]; then
             echo "::error::No deployment to activate"
             exit 1
