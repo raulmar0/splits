@@ -1,30 +1,30 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE } from "@/lib/env";
+import { updateSession } from "@/lib/supabase/middleware";
 
 const PUBLIC_PATHS = ["/login", "/signup"];
 const PUBLIC_PREFIXES = ["/api/strava/webhook", "/api/strava/callback", "/_next", "/favicon"];
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
-  const hasSession = req.cookies.get(SESSION_COOKIE)?.value;
+  const { user, response } = await updateSession(req);
   const isPublic = PUBLIC_PATHS.includes(pathname);
 
-  if (!hasSession && !isPublic) {
+  if (!user && !isPublic) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("from", pathname);
     return NextResponse.redirect(url);
   }
-  if (hasSession && isPublic) {
+  if (user && isPublic) {
     const url = req.nextUrl.clone();
     url.pathname = "/";
     url.search = "";
     return NextResponse.redirect(url);
   }
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {

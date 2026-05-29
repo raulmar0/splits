@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { Upload, Check, AlertTriangle, Loader2 } from "lucide-react";
 import { Button, SectionLabel, Chip } from "@/components/ui";
 import { parseWorkoutFile, SUPPORTED_EXTENSIONS, ParseError } from "@/lib/workout-io";
-import { importActivityAction, importPlannedAction } from "@/lib/appwrite/import-actions";
+import { importActivityAction, importPlannedAction } from "@/lib/supabase/import-actions";
 
 type UploadStatus = "parsing" | "saving" | "ok" | "duplicado" | "error";
 

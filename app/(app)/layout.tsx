@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/shell";
-import { getCurrentUser } from "@/lib/appwrite/server";
+import { getCurrentUser } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 

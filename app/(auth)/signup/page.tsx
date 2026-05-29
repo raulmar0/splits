@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import Link from "next/link";
-import { signUp, type AuthState } from "@/lib/appwrite/auth";
+import { signUp, type AuthState } from "@/lib/supabase/auth";
 import { Button, Card, Input } from "@/components/ui";
 
 export default function SignupPage() {

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/appwrite/server";
+import { getCurrentUser } from "@/lib/supabase/server";
 import { authorizeUrl } from "@/lib/strava/client";
 import { encrypt } from "@/lib/crypto";
 import { serverEnv } from "@/lib/env";
@@ -12,6 +12,6 @@ export async function GET(_req: NextRequest) {
     return NextResponse.json({ error: "STRAVA_CLIENT_ID no configurado" }, { status: 500 });
   }
 
-  const state = encrypt(`${user.$id}:${Math.floor(Date.now() / 1000)}`);
+  const state = encrypt(`${user.id}:${Math.floor(Date.now() / 1000)}`);
   return NextResponse.redirect(authorizeUrl(state));
 }

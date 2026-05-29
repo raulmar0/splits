@@ -7,7 +7,7 @@ import { TopBar } from "@/components/shell";
 import { Button } from "@/components/ui";
 import { TabNav, StructureTab, ImportTab, ExportTab, LivePreview } from "@/components/manual";
 import type { WorkoutFormData } from "@/components/manual/types";
-import { createPlannedAction } from "@/lib/appwrite/planned-actions";
+import { createPlannedAction } from "@/lib/supabase/planned-actions";
 
 const TABS = [
   { id: "estructura", label: "Estructura" },

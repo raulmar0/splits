@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/appwrite/server";
-import { athleteFromDoc, getAthlete } from "@/lib/appwrite/db";
+import { getCurrentUser } from "@/lib/supabase/server";
+import { athleteFromRow, getAthlete } from "@/lib/supabase/db";
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const doc = await getAthlete(user.$id);
+  const row = await getAthlete();
   return NextResponse.json({
-    user: { id: user.$id, email: user.email, name: user.name },
-    athlete: doc ? athleteFromDoc(doc) : null,
-    llmProvider: doc?.llmProvider ?? null,
-    hasLlmKey: !!doc?.llmApiKeyEncrypted,
-    mainSport: doc?.mainSport ?? null,
-    goal: doc?.goal ?? null,
+    user: { id: user.id, email: user.email ?? "", name: (user.user_metadata?.name as string) ?? user.email ?? "" },
+    athlete: row ? athleteFromRow(row) : null,
+    llmProvider: row?.llm_provider ?? null,
+    hasLlmKey: !!row?.llm_api_key_encrypted,
+    mainSport: row?.main_sport ?? null,
+    goal: row?.goal ?? null,
   });
 }

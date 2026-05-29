@@ -3,7 +3,7 @@ import { Manrope, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { AuthProvider } from "@/hooks/useAuth";
-import { getCurrentUser } from "@/lib/appwrite/server";
+import { getCurrentUser } from "@/lib/supabase/server";
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -32,7 +32,13 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const me = await getCurrentUser();
-  const authUser = me ? { id: me.$id, email: me.email, name: me.name } : null;
+  const authUser = me
+    ? {
+        id: me.id,
+        email: me.email ?? "",
+        name: ((me.user_metadata?.name as string) ?? me.email ?? "").toString(),
+      }
+    : null;
   return (
     <html
       lang="es"

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "./server";
-import { createActivity, createPlannedWorkout, findActivityByExternalId } from "./db";
+import { createActivity, createPlanned, findActivityByExternalId } from "./db";
 import type { ParsedActivity, ParsedWorkout } from "@/lib/workout-io/types";
 
 export type ImportResult = { id?: string; duplicate?: boolean; error?: string };
@@ -12,12 +12,12 @@ export async function importActivityAction(parsed: ParsedActivity): Promise<Impo
   if (!user) return { error: "No autenticado." };
 
   if (parsed.externalId) {
-    const existing = await findActivityByExternalId(user.$id, "import", parsed.externalId);
-    if (existing) return { id: existing.$id, duplicate: true };
+    const existing = await findActivityByExternalId(user.id, "import", parsed.externalId);
+    if (existing) return { id: existing.id, duplicate: true };
   }
 
   try {
-    const a = await createActivity(user.$id, {
+    const a = await createActivity(user.id, {
       source: "import",
       externalId: parsed.externalId,
       date: parsed.date,
@@ -36,10 +36,9 @@ export async function importActivityAction(parsed: ParsedActivity): Promise<Impo
       kj: parsed.kj,
     });
     revalidatePath("/", "layout");
-    return { id: a.id };
+    return { id: a?.id };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error al guardar la actividad.";
-    return { error: msg };
+    return { error: e instanceof Error ? e.message : "Error al guardar la actividad." };
   }
 }
 
@@ -49,7 +48,7 @@ export async function importPlannedAction(parsed: ParsedWorkout, dateISO?: strin
   const date = dateISO ?? new Date().toISOString().slice(0, 10);
 
   try {
-    const w = await createPlannedWorkout(user.$id, {
+    const w = await createPlanned(user.id, {
       date,
       sport: parsed.sport,
       title: parsed.title,
@@ -64,7 +63,6 @@ export async function importPlannedAction(parsed: ParsedWorkout, dateISO?: strin
     revalidatePath("/", "layout");
     return { id: w.id };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error al guardar el workout.";
-    return { error: msg };
+    return { error: e instanceof Error ? e.message : "Error al guardar el workout." };
   }
 }

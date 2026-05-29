@@ -1,14 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { decrypt, encrypt } from "@/lib/crypto";
 import { exchangeCode } from "@/lib/strava/client";
-import { upsertIntegration } from "@/lib/appwrite/db";
+import { upsertIntegration } from "@/lib/supabase/db";
 import { syncStrava } from "@/lib/strava/sync";
 import { serverEnv } from "@/lib/env";
 
-const SETTINGS_URL = (status: string) => {
-  const env = serverEnv();
-  return `${env.APP_URL}/settings?strava=${status}`;
-};
+const SETTINGS_URL = (status: string) => `${serverEnv().APP_URL}/settings?strava=${status}`;
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
@@ -42,11 +39,11 @@ export async function GET(req: NextRequest) {
   }
 
   await upsertIntegration(userId, "strava", {
-    accessTokenEncrypted: encrypt(token.access_token),
-    refreshTokenEncrypted: encrypt(token.refresh_token),
-    expiresAt: token.expires_at,
-    externalUserId: token.athlete ? String(token.athlete.id) : undefined,
-    scope: token.scope,
+    access_token_encrypted: encrypt(token.access_token),
+    refresh_token_encrypted: encrypt(token.refresh_token),
+    expires_at: token.expires_at,
+    external_user_id: token.athlete ? String(token.athlete.id) : null,
+    scope: token.scope ?? null,
   });
 
   try {

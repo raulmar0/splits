@@ -1,7 +1,7 @@
 import "server-only";
 import { serverEnv } from "@/lib/env";
 import { decrypt, encrypt } from "@/lib/crypto";
-import { upsertIntegration, getIntegration } from "@/lib/appwrite/db";
+import { getIntegration, upsertIntegration } from "@/lib/supabase/db";
 
 const STRAVA_BASE = "https://www.strava.com";
 
@@ -81,16 +81,16 @@ export async function getValidAccessToken(userId: string): Promise<string | null
   const integration = await getIntegration(userId, "strava");
   if (!integration) return null;
   const now = Math.floor(Date.now() / 1000);
-  if (integration.expiresAt && integration.expiresAt > now + 60) {
-    return decrypt(integration.accessTokenEncrypted);
+  if (integration.expires_at && integration.expires_at > now + 60) {
+    return decrypt(integration.access_token_encrypted);
   }
-  if (!integration.refreshTokenEncrypted) return null;
-  const refresh = decrypt(integration.refreshTokenEncrypted);
+  if (!integration.refresh_token_encrypted) return null;
+  const refresh = decrypt(integration.refresh_token_encrypted);
   const fresh = await refreshTokenCall(refresh);
   await upsertIntegration(userId, "strava", {
-    accessTokenEncrypted: encrypt(fresh.access_token),
-    refreshTokenEncrypted: encrypt(fresh.refresh_token),
-    expiresAt: fresh.expires_at,
+    access_token_encrypted: encrypt(fresh.access_token),
+    refresh_token_encrypted: encrypt(fresh.refresh_token),
+    expires_at: fresh.expires_at,
   });
   return fresh.access_token;
 }

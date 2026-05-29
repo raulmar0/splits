@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { saveAthlete, clearLlmKey, type SaveAthleteState } from "@/lib/appwrite/athlete-actions";
-import { signOut } from "@/lib/appwrite/auth";
+import { saveAthlete, clearLlmKey, type SaveAthleteState } from "@/lib/supabase/athlete-actions";
+import { signOut } from "@/lib/supabase/auth";
 import { Button, Card, CardHeader, Input } from "@/components/ui";
 
 export interface SettingsInitial {

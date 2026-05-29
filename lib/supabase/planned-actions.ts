@@ -1,9 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { getCurrentUser } from "./server";
-import { createPlannedWorkout } from "./db";
+import { createPlanned } from "./db";
 import type { Block, Sport } from "@/lib/types";
 
 export interface NewWorkoutInput {
@@ -29,7 +28,7 @@ export async function createPlannedAction(input: NewWorkoutInput): Promise<Creat
   if (!input.date) return { error: "La fecha es requerida." };
 
   try {
-    const w = await createPlannedWorkout(user.$id, {
+    const w = await createPlanned(user.id, {
       date: input.date,
       sport: input.sport,
       title: input.title,
@@ -47,10 +46,4 @@ export async function createPlannedAction(input: NewWorkoutInput): Promise<Creat
   } catch (e) {
     return { error: e instanceof Error ? e.message : "No se pudo guardar." };
   }
-}
-
-export async function createAndRedirect(input: NewWorkoutInput) {
-  const res = await createPlannedAction(input);
-  if (res?.error) return res;
-  redirect("/calendar");
 }

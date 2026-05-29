@@ -2,10 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { serverEnv } from "@/lib/env";
 import { mapStravaType } from "@/lib/strava/sport-map";
 import { fetchActivityById, getValidAccessToken } from "@/lib/strava/client";
-import { createActivity, findActivityByExternalId, getAthlete } from "@/lib/appwrite/db";
-import { createAdminClient } from "@/lib/appwrite/server";
-import { COLLECTIONS } from "@/lib/appwrite/schema";
-import { Query } from "node-appwrite";
+import {
+  createActivity,
+  deleteActivityRow,
+  findActivityByExternalId,
+  findUserByStravaAthleteId,
+  getAthleteById,
+} from "@/lib/supabase/db";
 
 export async function GET(req: NextRequest) {
   const mode = req.nextUrl.searchParams.get("hub.mode");
@@ -27,18 +30,6 @@ interface WebhookEvent {
   event_time: number;
 }
 
-async function findUserByStravaAthleteId(stravaId: number): Promise<string | null> {
-  const admin = createAdminClient();
-  const env = serverEnv();
-  const res = await admin.databases.listDocuments(env.APPWRITE_DATABASE_ID, COLLECTIONS.integrations, [
-    Query.equal("provider", "strava"),
-    Query.equal("externalUserId", String(stravaId)),
-    Query.limit(1),
-  ]);
-  const doc = res.documents[0] as { userId?: string } | undefined;
-  return doc?.userId ?? null;
-}
-
 export async function POST(req: NextRequest) {
   let event: WebhookEvent;
   try {
@@ -49,15 +40,12 @@ export async function POST(req: NextRequest) {
 
   if (event.object_type !== "activity") return NextResponse.json({ ok: true });
 
-  const userId = await findUserByStravaAthleteId(event.owner_id);
+  const userId = await findUserByStravaAthleteId(String(event.owner_id));
   if (!userId) return NextResponse.json({ ok: true });
 
   if (event.aspect_type === "delete") {
     const existing = await findActivityByExternalId(userId, "strava", String(event.object_id));
-    if (existing) {
-      const admin = createAdminClient();
-      await admin.databases.deleteDocument(serverEnv().APPWRITE_DATABASE_ID, COLLECTIONS.activities, existing.$id);
-    }
+    if (existing) await deleteActivityRow(existing.id);
     return NextResponse.json({ ok: true });
   }
 
@@ -69,7 +57,7 @@ export async function POST(req: NextRequest) {
     const existing = await findActivityByExternalId(userId, "strava", String(a.id));
     if (existing && event.aspect_type === "create") return NextResponse.json({ ok: true });
 
-    const athlete = await getAthlete(userId);
+    const athlete = await getAthleteById(userId);
     const ftp = athlete?.ftp;
     let tss: number | undefined;
     let intensityFactor: number | undefined;

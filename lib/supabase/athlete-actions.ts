@@ -2,23 +2,24 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "./server";
-import { upsertAthlete, deleteIntegration, getAthlete } from "./db";
+import { deleteIntegration, getAthlete, upsertAthlete } from "./db";
 import { encrypt } from "@/lib/crypto";
+import type { AthleteRow, LlmProvider } from "./types";
 
 export type SaveAthleteState = { error?: string; success?: boolean } | null;
 
-function num(v: FormDataEntryValue | null): number | undefined {
-  if (v == null) return undefined;
+function num(v: FormDataEntryValue | null): number | null {
+  if (v == null) return null;
   const s = String(v).trim();
-  if (!s) return undefined;
+  if (!s) return null;
   const n = Number(s);
-  return Number.isFinite(n) ? n : undefined;
+  return Number.isFinite(n) ? n : null;
 }
 
-function str(v: FormDataEntryValue | null): string | undefined {
-  if (v == null) return undefined;
+function str(v: FormDataEntryValue | null): string | null {
+  if (v == null) return null;
   const s = String(v).trim();
-  return s || undefined;
+  return s || null;
 }
 
 export async function saveAthlete(_prev: SaveAthleteState, formData: FormData): Promise<SaveAthleteState> {
@@ -28,7 +29,9 @@ export async function saveAthlete(_prev: SaveAthleteState, formData: FormData): 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { error: "El nombre es requerido." };
 
-  const patch: Record<string, unknown> = {
+  const llmProvider = str(formData.get("llmProvider"));
+
+  const patch: Partial<AthleteRow> = {
     name,
     initials:
       name
@@ -38,28 +41,23 @@ export async function saveAthlete(_prev: SaveAthleteState, formData: FormData): 
         .join("") || "AT",
     ftp: num(formData.get("ftp")),
     lthr: num(formData.get("lthr")),
-    maxHR: num(formData.get("maxHR")),
+    max_hr: num(formData.get("maxHR")),
     weight: num(formData.get("weight")),
     vo2max: num(formData.get("vo2max")),
     hrv: num(formData.get("hrv")),
-    restingHR: num(formData.get("restingHR")),
-    mainSport: str(formData.get("mainSport")),
+    resting_hr: num(formData.get("restingHR")),
+    main_sport: str(formData.get("mainSport")),
     goal: str(formData.get("goal")),
-    llmProvider: str(formData.get("llmProvider")) as "anthropic" | "openai" | undefined,
+    llm_provider: (llmProvider === "anthropic" || llmProvider === "openai" ? (llmProvider as LlmProvider) : null),
   };
 
   const apiKey = String(formData.get("llmApiKey") ?? "").trim();
-  if (apiKey) patch.llmApiKeyEncrypted = encrypt(apiKey);
-
-  for (const k of Object.keys(patch)) {
-    if (patch[k] === undefined) delete patch[k];
-  }
+  if (apiKey) patch.llm_api_key_encrypted = encrypt(apiKey);
 
   try {
-    await upsertAthlete(user.$id, patch);
+    await upsertAthlete(user.id, patch);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "No se pudo guardar.";
-    return { error: msg };
+    return { error: e instanceof Error ? e.message : "No se pudo guardar." };
   }
 
   revalidatePath("/settings");
@@ -70,15 +68,15 @@ export async function saveAthlete(_prev: SaveAthleteState, formData: FormData): 
 export async function clearLlmKey(): Promise<void> {
   const user = await getCurrentUser();
   if (!user) return;
-  const athlete = await getAthlete(user.$id);
+  const athlete = await getAthlete();
   if (!athlete) return;
-  await upsertAthlete(user.$id, { llmApiKeyEncrypted: "" });
+  await upsertAthlete(user.id, { llm_api_key_encrypted: null });
   revalidatePath("/settings");
 }
 
 export async function disconnectIntegration(provider: "strava" | "garmin" | "wahoo") {
   const user = await getCurrentUser();
   if (!user) return;
-  await deleteIntegration(user.$id, provider);
+  await deleteIntegration(user.id, provider);
   revalidatePath("/settings");
 }

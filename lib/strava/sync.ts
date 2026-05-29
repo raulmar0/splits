@@ -1,9 +1,14 @@
 import "server-only";
 import { mapStravaType } from "./sport-map";
 import { fetchActivities, type StravaActivity, getValidAccessToken } from "./client";
-import { createActivity, findActivityByExternalId, getAthlete, upsertIntegration } from "@/lib/appwrite/db";
+import {
+  createActivity,
+  findActivityByExternalId,
+  getAthleteById,
+  upsertIntegration,
+} from "@/lib/supabase/db";
 
-function computeTssIf(a: StravaActivity, ftp?: number): { tss?: number; intensityFactor?: number } {
+function computeTssIf(a: StravaActivity, ftp?: number | null): { tss?: number; intensityFactor?: number } {
   if (!ftp || ftp <= 0) return {};
   const np = a.weighted_average_watts ?? a.average_watts;
   if (!np || np <= 0 || !a.moving_time) return {};
@@ -16,7 +21,7 @@ export async function syncStrava(userId: string, sinceTs?: number): Promise<{ cr
   const token = await getValidAccessToken(userId);
   if (!token) throw new Error("No conexión a Strava");
 
-  const athlete = await getAthlete(userId);
+  const athlete = await getAthleteById(userId);
   const ftp = athlete?.ftp;
 
   const activities = await fetchActivities(token, sinceTs);
@@ -54,6 +59,6 @@ export async function syncStrava(userId: string, sinceTs?: number): Promise<{ cr
     created += 1;
   }
 
-  await upsertIntegration(userId, "strava", { lastSyncAt: Math.floor(Date.now() / 1000) });
+  await upsertIntegration(userId, "strava", { last_sync_at: Math.floor(Date.now() / 1000) });
   return { created, skipped };
 }
